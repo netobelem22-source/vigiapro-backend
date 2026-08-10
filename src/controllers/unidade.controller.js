@@ -23,7 +23,7 @@ const listar = async (req, res, next) => {
       const where = { ativo: true, id: { in: await unidadesDoParceiro(req.usuario.id) }, ...buscaWhere, ...semGpsWhere }
       const [total, unidades] = await Promise.all([
         prisma.unidade.count({ where }),
-        prisma.unidade.findMany({ where, select: CAMPOS_PARCEIRO, orderBy: [{ cidade: 'asc' }, { nome: 'asc' }], skip, take: lim })
+        prisma.unidade.findMany({ where, select: CAMPOS_PARCEIRO, orderBy: [{ nome: 'asc' }], skip, take: lim })
       ])
       return res.json({ unidades, total, pagina: pg, paginas: Math.max(1, Math.ceil(total / lim)) })
     }
@@ -31,7 +31,7 @@ const listar = async (req, res, next) => {
     const where = { ativo: true, ...buscaWhere, ...semGpsWhere }
     const [total, unidades, resumoAtivas] = await Promise.all([
       prisma.unidade.count({ where }),
-      prisma.unidade.findMany({ where, include: { empresa: true }, orderBy: [{ cidade: 'asc' }, { nome: 'asc' }], skip, take: lim }),
+      prisma.unidade.findMany({ where, include: { empresa: true }, orderBy: [{ nome: 'asc' }], skip, take: lim }),
       prisma.unidade.findMany({ where: { ativo: true }, select: { cidade: true, valorDiaria: true, latitude: true } })
     ])
     const totalCidades = new Set(resumoAtivas.map(u => u.cidade)).size
