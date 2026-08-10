@@ -5,6 +5,7 @@ const { unidadesDoParceiro } = require('../utils/parceiro')
 const resumoHoje = async (req, res, next) => {
   try {
     const { gte: hoje, lt: amanha } = rangeDiaBrasil()
+    const em24h = new Date(Date.now() + 24 * 60 * 60 * 1000)
     let where = {}
     if (req.usuario.role === 'GERENTE') where = { unidadeId: req.usuario.unidadeId }
     else if (req.usuario.role === 'TERCEIRO') where = { unidadeId: { in: await unidadesDoParceiro(req.usuario.id) } }
@@ -19,8 +20,9 @@ const resumoHoje = async (req, res, next) => {
       prisma.ponto.count({ where: { ...where, horario: { gte: hoje, lt: amanha } } }),
       prisma.ponto.count({ where: { ...where, horario: { gte: hoje, lt: amanha }, status: 'ABERTO' } }),
       prisma.unidade.count({ where: { ativo: true } }),
-      // Pendências totais, sem filtro de data — usadas pro lembrete sonoro de confirmação
-      prisma.pedido.count({ where: { ...where, status: 'PENDENTE' } }),
+      // Pendências usadas pro lembrete sonoro de confirmação: pedidos com turno dentro de 24h
+      // (inclui os já vencidos) — pedido pra daqui alguns dias ainda não precisa alertar.
+      prisma.pedido.count({ where: { ...where, status: 'PENDENTE', data: { lte: em24h } } }),
       prisma.ponto.count({ where: { ...where, status: 'ABERTO' } })
     ])
 
