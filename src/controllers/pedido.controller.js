@@ -210,4 +210,30 @@ const confirmarTodos = async (req, res, next) => {
   } catch (err) { next(err) }
 }
 
-module.exports = { listar, criar, buscar, atualizar, atualizarStatus, confirmarTodos, relatorioMensal }
+const recusarTodos = async (req, res, next) => {
+  try {
+    const { unidadeId, dataInicio, dataFim, motivo } = req.body
+    if (!unidadeId) return res.status(400).json({ erro: 'Selecione uma unidade' })
+    if (!dataInicio || !dataFim) return res.status(400).json({ erro: 'Informe o período' })
+    if (!motivo?.trim()) return res.status(400).json({ erro: 'Informe o motivo da recusa' })
+    if (req.usuario.role === 'GERENTE' && unidadeId !== req.usuario.unidadeId)
+      return res.status(403).json({ erro: 'Acesso não permitido' })
+
+    const inicio = dataLocal(dataInicio)
+    const fim = dataLocal(dataFim)
+    if (fim < inicio) return res.status(400).json({ erro: 'Data final deve ser maior ou igual à inicial' })
+
+    // Escopo obrigatório por unidade + período — evita recusar em massa sem querer
+    const LIMITE_LOTE = 500
+    const where = { unidadeId, data: { gte: inicio, lte: fim }, status: { not: 'CANCELADO' } }
+    const pedidos = await prisma.pedido.findMany({ where, take: LIMITE_LOTE })
+    if (pedidos.length === 0) return res.json({ recusados: 0 })
+
+    await prisma.pedido.updateMany({ where: { id: { in: pedidos.map(p => p.id) } }, data: { status: 'CANCELADO' } })
+    await Promise.all(pedidos.map(p => registrarHistorico(p.id, req.usuario.id, 'CANCELADO', `Recusado em lote: ${motivo.trim()}`)))
+
+    res.json({ recusados: pedidos.length, limitado: pedidos.length === LIMITE_LOTE })
+  } catch (err) { next(err) }
+}
+
+module.exports = { listar, criar, buscar, atualizar, atualizarStatus, confirmarTodos, recusarTodos, relatorioMensal }
