@@ -8,7 +8,9 @@ const listar = async (req, res, next) => {
   try {
     const { busca, semGps, page, limit } = req.query
     const pg = Math.max(1, parseInt(page) || 1)
-    const lim = Math.min(100, parseInt(limit) || 24)
+    // Teto alto o bastante pra "buscar todas" (dropdowns) não cortar silenciosamente
+    // conforme o número de unidades cresce; a tela paginada sempre pede um limit pequeno (24).
+    const lim = Math.min(1000, parseInt(limit) || 24)
     const skip = (pg - 1) * lim
 
     const buscaWhere = busca ? {
