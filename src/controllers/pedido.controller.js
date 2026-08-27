@@ -1,5 +1,4 @@
 const prisma = require('../utils/prisma')
-const { unidadesDoParceiro } = require('../utils/parceiro')
 const { rangeDiaBrasil } = require('../utils/data')
 
 const rangeData = (dataStr) => rangeDiaBrasil(dataStr)
@@ -22,7 +21,7 @@ const listar = async (req, res, next) => {
     const lim = Math.min(200, parseInt(limit) || 20)
     const where = {}
     if (req.usuario.role === 'GERENTE') where.unidadeId = req.usuario.unidadeId
-    else if (req.usuario.role === 'TERCEIRO') where.unidadeId = { in: await unidadesDoParceiro(req.usuario.id) }
+    else if (req.usuario.role === 'TERCEIRO') where.terceirizadaId = req.usuario.terceirizadaId
     else if (unidadeId) where.unidadeId = unidadeId
     if (data) where.data = rangeData(data)
     if (status) where.status = status
@@ -100,7 +99,7 @@ const buscar = async (req, res, next) => {
     if (!pedido) return res.status(404).json({ erro: 'Pedido não encontrado' })
     if (req.usuario.role === 'GERENTE' && pedido.unidadeId !== req.usuario.unidadeId)
       return res.status(403).json({ erro: 'Acesso não permitido' })
-    if (req.usuario.role === 'TERCEIRO' && !(await unidadesDoParceiro(req.usuario.id)).includes(pedido.unidadeId))
+    if (req.usuario.role === 'TERCEIRO' && pedido.terceirizadaId !== req.usuario.terceirizadaId)
       return res.status(403).json({ erro: 'Acesso não permitido' })
     res.json(pedido)
   } catch (err) { next(err) }
@@ -181,7 +180,7 @@ const atualizarStatus = async (req, res, next) => {
     if (req.usuario.role === 'GERENTE' && atual.unidadeId !== req.usuario.unidadeId)
       return res.status(403).json({ erro: 'Acesso não permitido' })
     if (req.usuario.role === 'TERCEIRO') {
-      if (!(await unidadesDoParceiro(req.usuario.id)).includes(atual.unidadeId))
+      if (atual.terceirizadaId !== req.usuario.terceirizadaId)
         return res.status(403).json({ erro: 'Acesso não permitido' })
       if (status !== 'CONFIRMADO')
         return res.status(403).json({ erro: 'Terceiros só podem confirmar pedidos' })

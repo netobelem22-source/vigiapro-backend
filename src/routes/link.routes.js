@@ -2,7 +2,6 @@ const router = require('express').Router()
 const { autenticar, autorizar } = require('../middleware/auth')
 const prisma = require('../utils/prisma')
 const { uploadFoto } = require('../utils/cloudinary')
-const { unidadesDoParceiro } = require('../utils/parceiro')
 
 // Gera links de ponto para um pedido — 1 link por vaga
 router.post('/gerar', autenticar, autorizar('GESTOR', 'GERENTE', 'TERCEIRO'), async (req, res, next) => {
@@ -14,7 +13,7 @@ router.post('/gerar', autenticar, autorizar('GESTOR', 'GERENTE', 'TERCEIRO'), as
     if (!pedido) return res.status(404).json({ erro: 'Pedido não encontrado' })
     if (req.usuario.role === 'GERENTE' && pedido.unidadeId !== req.usuario.unidadeId)
       return res.status(403).json({ erro: 'Acesso não permitido' })
-    if (req.usuario.role === 'TERCEIRO' && !(await unidadesDoParceiro(req.usuario.id)).includes(pedido.unidadeId))
+    if (req.usuario.role === 'TERCEIRO' && pedido.terceirizadaId !== req.usuario.terceirizadaId)
       return res.status(403).json({ erro: 'Acesso não permitido' })
 
     // Total de vigias = quantidade de vigias solicitados (dia ou noite, o maior)

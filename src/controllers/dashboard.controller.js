@@ -1,14 +1,21 @@
 const prisma = require('../utils/prisma')
 const { rangeDiaBrasil } = require('../utils/data')
-const { unidadesDoParceiro } = require('../utils/parceiro')
 
 const resumoHoje = async (req, res, next) => {
   try {
     const { gte: hoje, lt: amanha } = rangeDiaBrasil()
     const em24h = new Date(Date.now() + 24 * 60 * 60 * 1000)
-    let where = {}
-    if (req.usuario.role === 'GERENTE') where = { unidadeId: req.usuario.unidadeId }
-    else if (req.usuario.role === 'TERCEIRO') where = { unidadeId: { in: await unidadesDoParceiro(req.usuario.id) } }
+    // Pedido tem unidadeId/terceirizadaId direto; Ponto só tem unidadeId direto, então o
+    // escopo por terceirizada precisa passar pela relação com o pedido.
+    let wherePedido = {}
+    let wherePonto = {}
+    if (req.usuario.role === 'GERENTE') {
+      wherePedido = { unidadeId: req.usuario.unidadeId }
+      wherePonto = { unidadeId: req.usuario.unidadeId }
+    } else if (req.usuario.role === 'TERCEIRO') {
+      wherePedido = { terceirizadaId: req.usuario.terceirizadaId }
+      wherePonto = { pedido: { terceirizadaId: req.usuario.terceirizadaId } }
+    }
 
     // Busca configuração de valor
     let config = await prisma.configuracao.findFirst()
@@ -16,14 +23,14 @@ const resumoHoje = async (req, res, next) => {
     const valorDiaria = config.valorDiaria
 
     const [pedidosHoje, totalPontos, pontosAbertos, totalUnidades, pedidosPendentesTotal, pontosAbertosTotal] = await Promise.all([
-      prisma.pedido.findMany({ where: { ...where, data: { gte: hoje, lt: amanha } }, select: { status: true, qtdVigiaDia: true, qtdVigiNoite: true } }),
-      prisma.ponto.count({ where: { ...where, horario: { gte: hoje, lt: amanha } } }),
-      prisma.ponto.count({ where: { ...where, horario: { gte: hoje, lt: amanha }, status: 'ABERTO' } }),
+      prisma.pedido.findMany({ where: { ...wherePedido, data: { gte: hoje, lt: amanha } }, select: { status: true, qtdVigiaDia: true, qtdVigiNoite: true } }),
+      prisma.ponto.count({ where: { ...wherePonto, horario: { gte: hoje, lt: amanha } } }),
+      prisma.ponto.count({ where: { ...wherePonto, horario: { gte: hoje, lt: amanha }, status: 'ABERTO' } }),
       prisma.unidade.count({ where: { ativo: true } }),
       // Pendências usadas pro lembrete sonoro de confirmação: pedidos com turno dentro de 24h
       // (inclui os já vencidos) — pedido pra daqui alguns dias ainda não precisa alertar.
-      prisma.pedido.count({ where: { ...where, status: 'PENDENTE', data: { lte: em24h } } }),
-      prisma.ponto.count({ where: { ...where, status: 'ABERTO' } })
+      prisma.pedido.count({ where: { ...wherePedido, status: 'PENDENTE', data: { lte: em24h } } }),
+      prisma.ponto.count({ where: { ...wherePonto, status: 'ABERTO' } })
     ])
 
     const totalPedidos = pedidosHoje.length

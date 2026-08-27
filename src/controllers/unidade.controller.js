@@ -1,8 +1,15 @@
 const prisma = require('../utils/prisma')
-const { unidadesDoParceiro } = require('../utils/parceiro')
 
 // campos enxutos para o papel TERCEIRO: sem diária, sem funcionários, sem dados da empresa cliente
 const CAMPOS_PARCEIRO = { id: true, nome: true, endereco: true, cidade: true, estado: true, latitude: true, longitude: true, raioGps: true }
+
+// Unidades que aparecem em pedidos já atribuídos à empresa terceirizada do usuário —
+// não é mais um vínculo fixo, é dinâmico conforme os pedidos recebidos.
+const unidadesDaTerceirizada = async (terceirizadaId) => {
+  if (!terceirizadaId) return []
+  const pedidos = await prisma.pedido.findMany({ where: { terceirizadaId }, select: { unidadeId: true }, distinct: ['unidadeId'] })
+  return pedidos.map(p => p.unidadeId)
+}
 
 const listar = async (req, res, next) => {
   try {
@@ -22,7 +29,7 @@ const listar = async (req, res, next) => {
     const semGpsWhere = semGps === 'true' ? { latitude: null } : {}
 
     if (req.usuario.role === 'TERCEIRO') {
-      const where = { ativo: true, id: { in: await unidadesDoParceiro(req.usuario.id) }, ...buscaWhere, ...semGpsWhere }
+      const where = { ativo: true, id: { in: await unidadesDaTerceirizada(req.usuario.terceirizadaId) }, ...buscaWhere, ...semGpsWhere }
       const [total, unidades] = await Promise.all([
         prisma.unidade.count({ where }),
         prisma.unidade.findMany({ where, select: CAMPOS_PARCEIRO, orderBy: [{ nome: 'asc' }], skip, take: lim })
@@ -58,7 +65,7 @@ const criar = async (req, res, next) => {
 const buscar = async (req, res, next) => {
   try {
     if (req.usuario.role === 'TERCEIRO') {
-      if (!(await unidadesDoParceiro(req.usuario.id)).includes(req.params.id))
+      if (!(await unidadesDaTerceirizada(req.usuario.terceirizadaId)).includes(req.params.id))
         return res.status(403).json({ erro: 'Acesso não permitido' })
       const unidade = await prisma.unidade.findUnique({ where: { id: req.params.id }, select: CAMPOS_PARCEIRO })
       if (!unidade) return res.status(404).json({ erro: 'Não encontrada' })

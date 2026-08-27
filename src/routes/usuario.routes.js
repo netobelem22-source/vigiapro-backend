@@ -24,7 +24,7 @@ router.get('/', autorizar('GESTOR', 'GERENTE'), async (req, res, next) => {
     const [total, usuarios, totalInativos] = await Promise.all([
       prisma.usuario.count({ where }),
       prisma.usuario.findMany({
-        where, include: { unidade: true }, orderBy: { nome: 'asc' },
+        where, include: { unidade: true, terceirizada: true }, orderBy: { nome: 'asc' },
         skip: (pg - 1) * lim, take: lim
       }),
       prisma.usuario.count({ where: { ...baseWhere, ativo: false } })
@@ -52,13 +52,13 @@ router.post('/', autorizar('GESTOR'), async (req, res, next) => {
 
 router.put('/:id', autorizar('GESTOR'), async (req, res, next) => {
   try {
-    const { senha, id, criadoEm, unidade, pedidos, pontos, confirmacoes, historicos, ...resto } = req.body
+    const { senha, id, criadoEm, unidade, terceirizada, pedidos, pontos, confirmacoes, historicos, ...resto } = req.body
     const data = { ...resto }
     if (senha) data.senha = await bcrypt.hash(senha, 10)
     const usuario = await prisma.usuario.update({
       where: { id: req.params.id },
       data,
-      include: { unidade: true }
+      include: { unidade: true, terceirizada: true }
     })
     const { senha: _, ...dados } = usuario
     res.json(dados)

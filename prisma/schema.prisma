@@ -47,6 +47,10 @@ model Usuario {
   unidade   Unidade? @relation(fields: [unidadeId], references: [id])
   unidadeId String?
 
+  // Empresa terceirizada dona deste login (papel TERCEIRO) — escopa quais pedidos ele enxerga
+  terceirizada   EmpresaTerceirizada? @relation(fields: [terceirizadaId], references: [id])
+  terceirizadaId String?
+
   pedidos      Pedido[]
   pontos       Ponto[]
   confirmacoes Ponto[] @relation("Confirmacoes")
@@ -217,4 +221,5 @@ model EmpresaTerceirizada {
   criadoEm  DateTime @default(now())
 
   pedidos   Pedido[]
+  usuarios  Usuario[]
 }
