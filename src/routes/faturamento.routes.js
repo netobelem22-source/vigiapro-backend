@@ -12,7 +12,8 @@ const agregar = (paresFiltrados, valorHoraGlobal) => {
   for (const par of paresFiltrados) {
     const { entrada, saida, nomeVigia, segmentoPar } = par
     const uid = entrada.unidadeId
-    const valorHora = entrada.unidade?.valorDiaria || valorHoraGlobal
+    // Preço da empresa terceirizada escolhida no pedido tem prioridade sobre o valor da unidade
+    const valorHora = entrada.pedido?.terceirizada?.valorHora || entrada.unidade?.valorDiaria || valorHoraGlobal
     const diffMs = new Date(saida.horario) - new Date(entrada.horario)
     const diffMin = Math.floor(diffMs / 60000)
     const horas = Math.min(diffMin / 60, 12)
@@ -38,6 +39,7 @@ const agregar = (paresFiltrados, valorHoraGlobal) => {
     porUnidade[uid].detalhes.push({
       vigia: nomeVigia,
       segmento: segmentoPar,
+      terceirizada: entrada.pedido?.terceirizada?.nome || null,
       data: new Date(entrada.horario).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).split('/').reverse().join('-'),
       entrada: new Date(entrada.horario).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
       saida: new Date(saida.horario).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
@@ -92,7 +94,7 @@ router.get('/', async (req, res, next) => {
       include: {
         unidade: { include: { empresa: true } },
         vigia: true,
-        pedido: true
+        pedido: { include: { terceirizada: true } }
       },
       orderBy: { horario: 'asc' }
     })

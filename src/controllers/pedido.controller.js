@@ -30,7 +30,7 @@ const listar = async (req, res, next) => {
     const [total, pedidos] = await Promise.all([
       prisma.pedido.count({ where }),
       prisma.pedido.findMany({
-        where, include: { unidade: true, solicitante: true, pontos: { where: { status: { not: 'ABERTO' } } } },
+        where, include: { unidade: true, solicitante: true, terceirizada: true, pontos: { where: { status: { not: 'ABERTO' } } } },
         orderBy: { criadoEm: 'desc' },
         skip: (pg - 1) * lim,
         take: lim
@@ -42,7 +42,9 @@ const listar = async (req, res, next) => {
 
 const criar = async (req, res, next) => {
   try {
-    const { dataInicio, dataFim, turno, segmento, qtdVigiaDia, qtdVigiNoite, inicioTurnoDia, inicioTurnoNoite, fimTurnoDia, fimTurnoNoite, observacao, unidadeId } = req.body
+    const { dataInicio, dataFim, turno, segmento, qtdVigiaDia, qtdVigiNoite, inicioTurnoDia, inicioTurnoNoite, fimTurnoDia, fimTurnoNoite, observacao, unidadeId, terceirizadaId } = req.body
+
+    if (!terceirizadaId) return res.status(400).json({ erro: 'Selecione a empresa terceirizada' })
 
     const uid = unidadeId || req.usuario.unidadeId
     const inicio = dataLocal(dataInicio)
@@ -61,6 +63,7 @@ const criar = async (req, res, next) => {
         qtdVigiNoite: parseInt(qtdVigiNoite) || 0,
         inicioTurnoDia, inicioTurnoNoite, fimTurnoDia, fimTurnoNoite, observacao,
         unidadeId: uid,
+        terceirizadaId,
         solicitanteId: req.usuario.id,
         status: 'PENDENTE'
       })
@@ -69,7 +72,7 @@ const criar = async (req, res, next) => {
 
     // Cria todos os pedidos de uma vez
     const criados = await prisma.$transaction(
-      pedidos.map(p => prisma.pedido.create({ data: p, include: { unidade: true } }))
+      pedidos.map(p => prisma.pedido.create({ data: p, include: { unidade: true, terceirizada: true } }))
     )
 
     // Registra histórico do primeiro para referência
@@ -89,7 +92,7 @@ const buscar = async (req, res, next) => {
     const pedido = await prisma.pedido.findUnique({
       where: { id: req.params.id },
       include: {
-        unidade: true, solicitante: true,
+        unidade: true, solicitante: true, terceirizada: true,
         pontos: { include: { vigia: true } },
         historico: { include: { usuario: true }, orderBy: { criadoEm: 'desc' } }
       }
@@ -145,7 +148,7 @@ const relatorioMensal = async (req, res, next) => {
 
 const atualizar = async (req, res, next) => {
   try {
-    const { segmento, inicioTurnoDia, inicioTurnoNoite, fimTurnoDia, fimTurnoNoite } = req.body
+    const { segmento, inicioTurnoDia, inicioTurnoNoite, fimTurnoDia, fimTurnoNoite, terceirizadaId } = req.body
     const atual = await prisma.pedido.findUnique({ where: { id: req.params.id } })
     if (!atual) return res.status(404).json({ erro: 'Pedido não encontrado' })
     if (req.usuario.role === 'GERENTE' && atual.unidadeId !== req.usuario.unidadeId)
@@ -159,8 +162,9 @@ const atualizar = async (req, res, next) => {
     if (inicioTurnoNoite !== undefined) data.inicioTurnoNoite = inicioTurnoNoite
     if (fimTurnoDia !== undefined) data.fimTurnoDia = fimTurnoDia
     if (fimTurnoNoite !== undefined) data.fimTurnoNoite = fimTurnoNoite
+    if (terceirizadaId !== undefined) data.terceirizadaId = terceirizadaId
 
-    const pedido = await prisma.pedido.update({ where: { id: req.params.id }, data, include: { unidade: true } })
+    const pedido = await prisma.pedido.update({ where: { id: req.params.id }, data, include: { unidade: true, terceirizada: true } })
     await registrarHistorico(pedido.id, req.usuario.id, 'EDITADO', 'Segmento/horário do pedido atualizados')
     res.json(pedido)
   } catch (err) { next(err) }

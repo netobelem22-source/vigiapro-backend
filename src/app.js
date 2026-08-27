@@ -11,6 +11,7 @@ const configuracaoRoutes = require('./routes/configuracao.routes')
 const folhaRoutes = require('./routes/folha.routes')
 const faturamentoRoutes = require('./routes/faturamento.routes')
 const linkRoutes = require('./routes/link.routes')
+const terceirizadaRoutes = require('./routes/terceirizada.routes')
 const { errorHandler } = require('./middleware/errorHandler')
 
 const app = express()
@@ -32,6 +33,7 @@ app.use('/api/configuracao', configuracaoRoutes)
 app.use('/api/folha', folhaRoutes)
 app.use('/api/faturamento', faturamentoRoutes)
 app.use('/api/links', linkRoutes)
+app.use('/api/terceirizadas', terceirizadaRoutes)
 app.use(errorHandler)
 
 module.exports = app

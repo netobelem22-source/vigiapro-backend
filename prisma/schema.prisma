@@ -107,11 +107,15 @@ model Pedido {
   solicitante   Usuario  @relation(fields: [solicitanteId], references: [id])
   solicitanteId String
 
+  terceirizada   EmpresaTerceirizada? @relation(fields: [terceirizadaId], references: [id])
+  terceirizadaId String?
+
   pontos        Ponto[]
   historico     HistoricoPedido[]
   links         LinkPonto[]
 
   @@index([unidadeId])
+  @@index([terceirizadaId])
   @@index([data])
   @@index([status])
 }
@@ -202,4 +206,15 @@ model UnidadeParceiro {
 
   @@unique([usuarioId, unidadeId])
   @@index([unidadeId])
+}
+
+// Empresa terceirizada que fornece vigias — preço próprio por hora, escolhida por pedido.
+model EmpresaTerceirizada {
+  id        String   @id @default(uuid())
+  nome      String
+  valorHora Float
+  ativo     Boolean  @default(true)
+  criadoEm  DateTime @default(now())
+
+  pedidos   Pedido[]
 }
