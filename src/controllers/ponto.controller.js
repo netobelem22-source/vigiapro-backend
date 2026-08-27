@@ -66,6 +66,10 @@ const listar = async (req, res, next) => {
     const where = {}
     if (req.usuario.role === 'VIGIA') where.vigiaId = req.usuario.id
     else if (req.usuario.role === 'GERENTE') where.unidadeId = req.usuario.unidadeId
+    else if (req.usuario.role === 'TERCEIRO') {
+      where.pedido = { terceirizadaId: req.usuario.terceirizadaId }
+      if (unidadeId) where.unidadeId = unidadeId
+    }
     else {
       if (unidadeId) where.unidadeId = unidadeId
       if (vigiaId) where.vigiaId = vigiaId

@@ -5,7 +5,7 @@ const { registrar, confirmar, listar } = require('../controllers/ponto.controlle
 router.use(autenticar)
 router.post('/', autorizar('VIGIA'), registrar)
 router.patch('/:id/confirmar', autorizar('GERENTE', 'GESTOR'), confirmar)
-router.get('/', autorizar('VIGIA', 'GERENTE', 'GESTOR'), listar)
+router.get('/', autorizar('VIGIA', 'GERENTE', 'GESTOR', 'TERCEIRO'), listar)
 router.post('/manual', autenticar, autorizar('GESTOR', 'GERENTE'), async (req, res, next) => {
   try {
     const prisma = require('../utils/prisma')
