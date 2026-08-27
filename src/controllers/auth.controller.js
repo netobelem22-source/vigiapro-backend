@@ -14,7 +14,7 @@ const login = async (req, res, next) => {
       return res.status(403).json({ erro: 'Usuário inativo' })
 
     const token = jwt.sign(
-      { id: usuario.id, role: usuario.role, unidadeId: usuario.unidadeId },
+      { id: usuario.id, role: usuario.role, unidadeId: usuario.unidadeId, terceirizadaId: usuario.terceirizadaId },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN }
     )
