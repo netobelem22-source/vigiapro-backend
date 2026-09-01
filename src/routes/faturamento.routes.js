@@ -40,6 +40,7 @@ const agregar = (paresFiltrados, valorHoraGlobal) => {
       vigia: nomeVigia,
       segmento: segmentoPar,
       terceirizada: entrada.pedido?.terceirizada?.nome || null,
+      observacao: entrada.pedido?.observacao || null,
       data: new Date(entrada.horario).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).split('/').reverse().join('-'),
       entrada: new Date(entrada.horario).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
       saida: new Date(saida.horario).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }),
