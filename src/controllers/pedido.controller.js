@@ -1,3 +1,4 @@
+const { randomUUID } = require('crypto')
 const prisma = require('../utils/prisma')
 const { rangeDiaBrasil } = require('../utils/data')
 
@@ -62,13 +63,16 @@ const criar = async (req, res, next) => {
     if (uids.length * dias > LIMITE_LOTE)
       return res.status(400).json({ erro: `Isso geraria ${uids.length * dias} pedidos de uma vez (limite: ${LIMITE_LOTE}). Reduza o período ou o número de unidades.` })
 
-    // Gera um pedido para cada unidade x cada dia do período
+    // Gera um pedido para cada unidade x cada dia do período — id gerado aqui (em vez de
+    // deixar o banco gerar) pra poder usar createMany (1 round-trip) e ainda saber quais
+    // ids buscar depois, ao invés de um create por pedido (lento demais em lotes grandes)
     const pedidos = []
     for (const uid of uids) {
       const atual = new Date(inicio)
       while (atual <= fim) {
         const dataStr = `${atual.getFullYear()}-${String(atual.getMonth()+1).padStart(2,'0')}-${String(atual.getDate()).padStart(2,'0')}`
         pedidos.push({
+          id: randomUUID(),
           data: dataLocal(dataStr),
           turno,
           segmento: segmento || 'LOJA',
@@ -85,22 +89,29 @@ const criar = async (req, res, next) => {
     }
 
     // Cria todos os pedidos de uma vez
-    const criados = await prisma.$transaction(
-      pedidos.map(p => prisma.pedido.create({ data: p, include: { unidade: true, terceirizada: true } }))
-    )
+    await prisma.pedido.createMany({ data: pedidos })
+    const criados = await prisma.pedido.findMany({
+      where: { id: { in: pedidos.map(p => p.id) } },
+      include: { unidade: true, terceirizada: true }
+    })
 
     // Registra histórico do primeiro pedido de cada unidade, como referência do lote
+    // (em lote também — um await por unidade já foi o gargalo que deixava lotes grandes lentos)
     if (criados.length > 0) {
       const primeiroPorUnidade = {}
       for (const p of criados) if (!primeiroPorUnidade[p.unidadeId]) primeiroPorUnidade[p.unidadeId] = p
-      for (const p of Object.values(primeiroPorUnidade)) {
-        const detalhe = uids.length > 1
+      const historicos = Object.values(primeiroPorUnidade).map(p => ({
+        pedidoId: p.id,
+        usuarioId: req.usuario.id,
+        acao: 'CRIADO',
+        detalhe: uids.length > 1
           ? `Pedido em lote para ${uids.length} unidades — ${dias} dia(s) cada (${dataInicio} até ${dataFim || dataInicio})`
           : dias === 1
             ? `Pedido criado para ${p.unidade?.nome}`
             : `${dias} pedidos criados (${dataInicio} até ${dataFim || dataInicio}) para ${p.unidade?.nome}`
-        await registrarHistorico(p.id, req.usuario.id, 'CRIADO', detalhe)
-      }
+      }))
+      try { await prisma.historicoPedido.createMany({ data: historicos }) }
+      catch (e) { console.error('Erro histórico em lote:', e.message) }
     }
 
     res.status(201).json({ criados: criados.length, unidades: uids.length, pedidos: criados })
