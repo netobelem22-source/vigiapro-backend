@@ -41,32 +41,47 @@ const listar = async (req, res, next) => {
 
 const criar = async (req, res, next) => {
   try {
-    const { dataInicio, dataFim, turno, segmento, qtdVigiaDia, qtdVigiNoite, inicioTurnoDia, inicioTurnoNoite, fimTurnoDia, fimTurnoNoite, observacao, unidadeId, terceirizadaId } = req.body
+    const { dataInicio, dataFim, turno, segmento, qtdVigiaDia, qtdVigiNoite, inicioTurnoDia, inicioTurnoNoite, fimTurnoDia, fimTurnoNoite, observacao, unidadeId, unidadeIds, terceirizadaId } = req.body
 
     if (!terceirizadaId) return res.status(400).json({ erro: 'Selecione a empresa terceirizada' })
 
-    const uid = unidadeId || req.usuario.unidadeId
+    // GERENTE só pode pedir pra própria unidade, mesmo que o corpo mande outra coisa
+    const uids = req.usuario.role === 'GERENTE'
+      ? [req.usuario.unidadeId]
+      : (Array.isArray(unidadeIds) && unidadeIds.length > 0 ? [...new Set(unidadeIds)] : [unidadeId || req.usuario.unidadeId])
+
+    if (uids.length === 0 || uids.some(u => !u)) return res.status(400).json({ erro: 'Selecione ao menos uma unidade' })
+
     const inicio = dataLocal(dataInicio)
     const fim = dataLocal(dataFim || dataInicio)
+    const dias = Math.round((fim - inicio) / 86400000) + 1
 
-    // Gera um pedido para cada dia do período
+    // Teto de segurança pro tamanho da transação (unidades x dias) — pedido em lote grande
+    // demais pode estourar o pool de conexões do Supabase
+    const LIMITE_LOTE = 1000
+    if (uids.length * dias > LIMITE_LOTE)
+      return res.status(400).json({ erro: `Isso geraria ${uids.length * dias} pedidos de uma vez (limite: ${LIMITE_LOTE}). Reduza o período ou o número de unidades.` })
+
+    // Gera um pedido para cada unidade x cada dia do período
     const pedidos = []
-    const atual = new Date(inicio)
-    while (atual <= fim) {
-      const dataStr = `${atual.getFullYear()}-${String(atual.getMonth()+1).padStart(2,'0')}-${String(atual.getDate()).padStart(2,'0')}`
-      pedidos.push({
-        data: dataLocal(dataStr),
-        turno,
-        segmento: segmento || 'LOJA',
-        qtdVigiaDia: parseInt(qtdVigiaDia) || 0,
-        qtdVigiNoite: parseInt(qtdVigiNoite) || 0,
-        inicioTurnoDia, inicioTurnoNoite, fimTurnoDia, fimTurnoNoite, observacao,
-        unidadeId: uid,
-        terceirizadaId,
-        solicitanteId: req.usuario.id,
-        status: 'PENDENTE'
-      })
-      atual.setDate(atual.getDate() + 1)
+    for (const uid of uids) {
+      const atual = new Date(inicio)
+      while (atual <= fim) {
+        const dataStr = `${atual.getFullYear()}-${String(atual.getMonth()+1).padStart(2,'0')}-${String(atual.getDate()).padStart(2,'0')}`
+        pedidos.push({
+          data: dataLocal(dataStr),
+          turno,
+          segmento: segmento || 'LOJA',
+          qtdVigiaDia: parseInt(qtdVigiaDia) || 0,
+          qtdVigiNoite: parseInt(qtdVigiNoite) || 0,
+          inicioTurnoDia, inicioTurnoNoite, fimTurnoDia, fimTurnoNoite, observacao,
+          unidadeId: uid,
+          terceirizadaId,
+          solicitanteId: req.usuario.id,
+          status: 'PENDENTE'
+        })
+        atual.setDate(atual.getDate() + 1)
+      }
     }
 
     // Cria todos os pedidos de uma vez
@@ -74,15 +89,21 @@ const criar = async (req, res, next) => {
       pedidos.map(p => prisma.pedido.create({ data: p, include: { unidade: true, terceirizada: true } }))
     )
 
-    // Registra histórico do primeiro para referência
+    // Registra histórico do primeiro pedido de cada unidade, como referência do lote
     if (criados.length > 0) {
-      const detalhe = criados.length === 1
-        ? `Pedido criado para ${criados[0].unidade?.nome}`
-        : `${criados.length} pedidos criados (${dataInicio} até ${dataFim || dataInicio}) para ${criados[0].unidade?.nome}`
-      await registrarHistorico(criados[0].id, req.usuario.id, 'CRIADO', detalhe)
+      const primeiroPorUnidade = {}
+      for (const p of criados) if (!primeiroPorUnidade[p.unidadeId]) primeiroPorUnidade[p.unidadeId] = p
+      for (const p of Object.values(primeiroPorUnidade)) {
+        const detalhe = uids.length > 1
+          ? `Pedido em lote para ${uids.length} unidades — ${dias} dia(s) cada (${dataInicio} até ${dataFim || dataInicio})`
+          : dias === 1
+            ? `Pedido criado para ${p.unidade?.nome}`
+            : `${dias} pedidos criados (${dataInicio} até ${dataFim || dataInicio}) para ${p.unidade?.nome}`
+        await registrarHistorico(p.id, req.usuario.id, 'CRIADO', detalhe)
+      }
     }
 
-    res.status(201).json({ criados: criados.length, pedidos: criados })
+    res.status(201).json({ criados: criados.length, unidades: uids.length, pedidos: criados })
   } catch (err) { next(err) }
 }
 
